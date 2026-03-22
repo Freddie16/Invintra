@@ -1,0 +1,29 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #7C3AED;
+  --color-primary-dark: #6D28D9;
+  --color-primary-light: #EDE9FE;
+  --color-surface: #FFFFFF;
+  --color-background: #F8FAFC;
+  --color-success: #10B981;
+  --color-danger: #F43F5E;
+}
+
+@layer base {
+  body {
+    @apply bg-background text-slate-800 font-sans antialiased;
+  }
+}
+
+.glass-card {
+  @apply bg-white/80 backdrop-blur-md border border-slate-200 shadow-sm rounded-2xl;
+}
+
+.btn-primary {
+  @apply bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-xl transition-all duration-200 font-medium flex items-center gap-2;
+}
+
+.btn-ghost {
+  @apply hover:bg-slate-100 text-slate-600 px-4 py-2 rounded-xl transition-all duration-200 font-medium flex items-center gap-2;
+}

@@ -1,0 +1,68 @@
+{
+  "entities": {
+    "Strategy": {
+      "title": "Strategy",
+      "description": "A quantitative trading strategy.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Name of the strategy." },
+        "isActive": { "type": "boolean", "description": "Whether the strategy is currently running." },
+        "riskLimit": { "type": "number", "description": "Maximum risk allowed in USD." },
+        "pnl": { "type": "number", "description": "Total profit and loss percentage." },
+        "winRate": { "type": "number", "description": "Percentage of winning trades." },
+        "tradesCount": { "type": "integer", "description": "Total number of trades executed." },
+        "userId": { "type": "string", "description": "The ID of the user who owns this strategy." },
+        "stopLoss": { "type": "number", "description": "Stop loss percentage." },
+        "takeProfit": { "type": "number", "description": "Take profit percentage." }
+      },
+      "required": ["name", "isActive", "riskLimit", "userId"]
+    },
+    "Trade": {
+      "title": "Trade",
+      "description": "A single trade executed by a strategy.",
+      "type": "object",
+      "properties": {
+        "strategyId": { "type": "string", "description": "The ID of the strategy that executed this trade." },
+        "symbol": { "type": "string", "description": "The trading pair (e.g., BTC/USDT)." },
+        "entryPrice": { "type": "number", "description": "The price at which the trade was opened." },
+        "exitPrice": { "type": "number", "description": "The price at which the trade was closed." },
+        "status": { "type": "string", "enum": ["OPEN", "CLOSED"], "description": "Current status of the trade." },
+        "type": { "type": "string", "enum": ["BUY", "SELL"], "description": "Type of trade (Buy or Sell)." },
+        "timestamp": { "type": "string", "format": "date-time", "description": "When the trade was executed." },
+        "quantity": { "type": "number", "description": "The amount of the asset traded." },
+        "pnl": { "type": "number", "description": "Profit or loss for this trade." },
+        "userId": { "type": "string", "description": "The ID of the user who owns this trade." }
+      },
+      "required": ["strategyId", "symbol", "entryPrice", "status", "type", "timestamp", "userId"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile and subscription data.",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email", "description": "User's email address." },
+        "displayName": { "type": "string", "description": "User's display name." },
+        "isSubscribed": { "type": "boolean", "description": "Whether the user has an active subscription." },
+        "subscriptionTier": { "type": "string", "enum": ["FREE", "PRO", "LIFETIME"], "description": "The user's subscription tier." },
+        "subscriptionExpiry": { "type": "string", "format": "date-time", "description": "When the subscription expires." },
+        "isSuperAdmin": { "type": "boolean", "description": "Whether the user is a super admin." },
+        "role": { "type": "string", "enum": ["admin", "user", "read-only"], "description": "User's role for access control." }
+      },
+      "required": ["email", "isSubscribed", "subscriptionTier", "role"]
+    }
+  },
+  "firestore": {
+    "/strategies/{strategyId}": {
+      "schema": "Strategy",
+      "description": "User-defined trading strategies."
+    },
+    "/trades/{tradeId}": {
+      "schema": "Trade",
+      "description": "Execution logs for all trades."
+    },
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile and subscription information."
+    }
+  }
+}

@@ -1,0 +1,210 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: strategies
+    // Document ID: auto-generated
+    // Fields:
+    //   - name: string (required, 1-100 chars)
+    //   - isActive: bool (required)
+    //   - riskLimit: number (required, positive)
+    //   - pnl: number (optional)
+    //   - winRate: number (optional, 0-100)
+    //   - tradesCount: int (optional, positive)
+    //   - userId: string (required, matches auth.uid)
+    //   - stopLoss: number (optional, positive)
+    //   - takeProfit: number (optional, positive)
+    //
+    // Collection: trades
+    // Document ID: auto-generated
+    // Fields:
+    //   - strategyId: string (required)
+    //   - symbol: string (required)
+    //   - entryPrice: number (required, positive)
+    //   - exitPrice: number (optional, positive)
+    //   - status: string (required, enum: ['OPEN', 'CLOSED'])
+    //   - type: string (required, enum: ['BUY', 'SELL'])
+    //   - timestamp: string (required, ISO 8601)
+    //   - pnl: number (optional)
+    //   - userId: string (required, matches auth.uid)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidDateString(dateStr) {
+      return dateStr is string && dateStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$");
+    }
+
+    function hasOnlyAllowedFields(data, allowedFields) {
+      return data.keys().hasOnly(allowedFields);
+    }
+
+    // --- Domain Validators ---
+
+    function isValidStrategy(data) {
+      let requiredFields = ['name', 'isActive', 'riskLimit', 'userId', 'assetId'];
+      let optionalFields = ['pnl', 'winRate', 'tradesCount', 'stopLoss', 'takeProfit', 'id'];
+      return data.keys().hasAll(requiredFields) &&
+             hasOnlyAllowedFields(data, requiredFields.concat(optionalFields)) &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+             data.isActive is bool &&
+             data.riskLimit is number && data.riskLimit >= 0 &&
+             data.userId == request.auth.uid &&
+             data.assetId is string &&
+             (!('stopLoss' in data) || (data.stopLoss is number && data.stopLoss >= 0)) &&
+             (!('takeProfit' in data) || (data.takeProfit is number && data.takeProfit >= 0)) &&
+             (!('pnl' in data) || (data.pnl is number)) &&
+             (!('winRate' in data) || (data.winRate is number && data.winRate >= 0 && data.winRate <= 100)) &&
+             (!('tradesCount' in data) || (data.tradesCount is int && data.tradesCount >= 0));
+    }
+
+    function isValidTrade(data) {
+      let requiredFields = ['strategyId', 'symbol', 'entryPrice', 'status', 'type', 'timestamp', 'userId', 'quantity'];
+      let optionalFields = ['exitPrice', 'pnl', 'id', 'assetId', 'tradingFee'];
+      return data.keys().hasAll(requiredFields) &&
+             hasOnlyAllowedFields(data, requiredFields.concat(optionalFields)) &&
+             data.strategyId is string && data.strategyId.size() > 0 &&
+             data.symbol is string && data.symbol.size() > 0 && data.symbol.size() <= 20 &&
+             data.entryPrice is number && data.entryPrice >= 0 &&
+             data.quantity is number && data.quantity > 0 &&
+             data.status in ['OPEN', 'CLOSED'] &&
+             data.type in ['BUY', 'SELL'] &&
+             isValidDateString(data.timestamp) &&
+             data.userId == request.auth.uid &&
+             (!('exitPrice' in data) || (data.exitPrice is number && data.exitPrice >= 0)) &&
+             (!('pnl' in data) || (data.pnl is number)) &&
+             (!('assetId' in data) || (data.assetId is string)) &&
+             (!('tradingFee' in data) || (data.tradingFee is number));
+    }
+
+    function isValidUserProfile(data) {
+      let requiredFields = ['email', 'isSubscribed', 'subscriptionTier', 'role'];
+      let optionalFields = ['displayName', 'subscriptionExpiry', 'isSuperAdmin', 'uid', 'balance', 'favorites', 'tradingFeeRate', 'defaultStopLoss', 'defaultTakeProfit'];
+      return data.keys().hasAll(requiredFields) &&
+             hasOnlyAllowedFields(data, requiredFields.concat(optionalFields)) &&
+             isValidEmail(data.email) &&
+             data.isSubscribed is bool &&
+             data.subscriptionTier in ['FREE', 'PRO', 'LIFETIME'] &&
+             data.role in ['admin', 'user', 'read-only'] &&
+             (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 100)) &&
+             (!('subscriptionExpiry' in data) || (data.subscriptionExpiry == null || isValidDateString(data.subscriptionExpiry))) &&
+             (!('isSuperAdmin' in data) || (data.isSuperAdmin is bool)) &&
+             (!('balance' in data) || (data.balance is number)) &&
+             (!('favorites' in data) || (data.favorites is list)) &&
+             (!('tradingFeeRate' in data) || (data.tradingFeeRate is number)) &&
+             (!('defaultStopLoss' in data) || (data.defaultStopLoss is number)) &&
+             (!('defaultTakeProfit' in data) || (data.defaultTakeProfit is number));
+    }
+
+    function isValidStrategyAlert(data) {
+      let requiredFields = ['strategyId', 'userId', 'triggerType', 'isActive', 'message', 'createdAt'];
+      let optionalFields = ['threshold', 'id'];
+      return data.keys().hasAll(requiredFields) &&
+             hasOnlyAllowedFields(data, requiredFields.concat(optionalFields)) &&
+             data.strategyId is string &&
+             data.userId == request.auth.uid &&
+             data.triggerType in ['PNL_ABOVE', 'PNL_BELOW', 'TRADE_OPEN', 'TRADE_CLOSE'] &&
+             data.isActive is bool &&
+             data.message is string &&
+             isValidDateString(data.createdAt) &&
+             (!('threshold' in data) || (data.threshold is number));
+    }
+
+    function isValidGoal(data) {
+      let requiredFields = ['userId', 'name', 'targetAmount', 'currentAmount', 'createdAt'];
+      let optionalFields = ['deadline', 'id'];
+      return data.keys().hasAll(requiredFields) &&
+             hasOnlyAllowedFields(data, requiredFields.concat(optionalFields)) &&
+             data.userId == request.auth.uid &&
+             data.name is string && data.name.size() > 0 &&
+             data.targetAmount is number && data.targetAmount > 0 &&
+             data.currentAmount is number &&
+             isValidDateString(data.createdAt) &&
+             (!('deadline' in data) || (data.deadline == null || isValidDateString(data.deadline)));
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (
+          (request.auth.token.email == "freddiemurigi@gmail.com" && request.auth.token.email_verified == true) ||
+          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+           (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' || 
+            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isSuperAdmin == true))
+        );
+    }
+
+    function isReadOnly() {
+      return isAuthenticated() && 
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'read-only';
+    }
+
+    function canWrite() {
+      return isAuthenticated() && !isReadOnly();
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /strategies/{strategyId} {
+      allow read: if isAuthenticated() && (resource == null || resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if canWrite() && isValidStrategy(request.resource.data);
+      allow update: if (canWrite() && isDocOwner() && isValidStrategy(request.resource.data)) || isAdmin();
+      allow delete: if (canWrite() && isDocOwner()) || isAdmin();
+    }
+
+    match /trades/{tradeId} {
+      allow read: if isAuthenticated() && (resource == null || resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if canWrite() && isValidTrade(request.resource.data);
+      allow update: if (canWrite() && isDocOwner() && isValidTrade(request.resource.data)) || isAdmin();
+      allow delete: if (canWrite() && isDocOwner()) || isAdmin();
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && isValidUserProfile(request.resource.data) && 
+                      (!('isSuperAdmin' in request.resource.data) || request.resource.data.isSuperAdmin == false) &&
+                      (request.resource.data.role == 'user' || isAdmin());
+      allow update: if (isOwner(userId) && isValidUserProfile(request.resource.data) && 
+                       (!('isSuperAdmin' in request.resource.data) || request.resource.data.isSuperAdmin == resource.data.isSuperAdmin) &&
+                       (request.resource.data.role == resource.data.role || isAdmin())) || 
+                      isAdmin();
+    }
+
+    match /strategyAlerts/{alertId} {
+      allow read: if isAuthenticated() && (resource == null || resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if canWrite() && isValidStrategyAlert(request.resource.data);
+      allow update: if (canWrite() && isDocOwner() && isValidStrategyAlert(request.resource.data)) || isAdmin();
+      allow delete: if (canWrite() && isDocOwner()) || isAdmin();
+    }
+
+    match /goals/{goalId} {
+      allow read: if isAuthenticated() && (resource == null || resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if canWrite() && isValidGoal(request.resource.data);
+      allow update: if (canWrite() && isDocOwner() && isValidGoal(request.resource.data)) || isAdmin();
+      allow delete: if (canWrite() && isDocOwner()) || isAdmin();
+    }
+  }
+}
